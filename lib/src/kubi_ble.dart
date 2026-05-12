@@ -2,6 +2,13 @@ import 'types/kubi_device.dart';
 import 'types/pan_tilt_angles.dart';
 import 'types/move_result.dart';
 import 'types/move_event.dart';
+import 'errors/kubi_ble_error.dart';
+
+// TODO(Phase 3): Update this interface to match docs/api-design.md
+// - Convert callbacks to Stream-based events
+// - Add MoveSpeed sealed class
+// - Add SettleOptions, CancelToken, PositionSnapshot types
+// - Update method signatures to match new design
 
 /// Abstract interface for Kubi BLE operations.
 ///
@@ -9,6 +16,8 @@ import 'types/move_event.dart';
 /// - **Write (command)**: [moveTo] / [setTarget]
 /// - **Read (observe)**: [getCommandedPosition] / [getActualPosition] / [waitUntilSettled] / [subscribePosition]
 /// - **Events**: [onMove] (4 phases) / [onConnectionStateChange] / [onDebugEvent]
+///
+/// See docs/api-design.md for the latest design.
 abstract interface class KubiBle {
   // ================================================================
   // Connection layer
