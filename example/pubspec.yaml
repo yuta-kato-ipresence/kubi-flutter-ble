@@ -1,0 +1,23 @@
+name: kubi_flutter_ble_example
+description: Example app for kubi_flutter_ble
+
+publish_to: 'none'
+
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.0
+  flutter: ^3.32.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  kubi_flutter_ble:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:

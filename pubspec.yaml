@@ -1,0 +1,22 @@
+name: kubi_flutter_ble
+description: A modern Flutter BLE package for Kubi robotic devices.
+version: 0.1.0
+homepage: https://github.com/iPreTeam-Innovate/kubi-flutter-ble
+
+environment:
+  sdk: ^3.11.0
+  flutter: ^3.32.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  universal_ble: ^1.2.0
+  meta: ^1.15.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mocktail: ^1.0.4
+
+flutter:
