@@ -1,15 +1,17 @@
-/// Pan and tilt angles in degrees.
+import 'package:meta/meta.dart';
+
+/// Pan / Tilt 角度 (度)。
 ///
-/// Pan range: -150° to +150°
-/// Tilt range: -20° to +40°
+/// - Pan range: -150° 〜 +150°
+/// - Tilt range: -20° 〜 +40°
+///
+/// 範囲外の値も保持可能 (clamp は呼び出し側責務)。
+@immutable
 final class PanTiltAngles {
   final double pan;
   final double tilt;
 
   const PanTiltAngles({required this.pan, required this.tilt});
-
-  @override
-  String toString() => 'PanTiltAngles(pan: $pan°, tilt: $tilt°)';
 
   @override
   bool operator ==(Object other) =>
@@ -18,4 +20,7 @@ final class PanTiltAngles {
 
   @override
   int get hashCode => Object.hash(pan, tilt);
+
+  @override
+  String toString() => 'PanTiltAngles(pan: $pan°, tilt: $tilt°)';
 }
