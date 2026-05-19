@@ -136,17 +136,10 @@ final class KubiBleImpl implements KubiBle {
     }
 
     ctl.onListen = () async {
-      try {
-        await ub.UniversalBle.startScan(
-          scanFilter: ub.ScanFilter(
-            withNamePrefix: const [proto.deviceNamePrefix],
-          ),
-        );
-      } on Object catch (e, st) {
-        ctl.addError(BleUnavailableError('startScan failed: $e'), st);
-        await stop();
-        return;
-      }
+      // CRITICAL: scanStream は broadcast (バッファ無し) なので、emit を取り逃さないよう
+      // startScan の前に subscribe しておく必要がある。
+      // Web の universal_ble は requestDevice picker の await 内で scanStream.add() を
+      // 同期的に呼ぶため、startScan の Future 完了後に subscribe すると emit を逃す。
       sub = ub.UniversalBle.scanStream.listen(
         (dev) {
           if (ctl.isClosed) return;
@@ -158,6 +151,25 @@ final class KubiBleImpl implements KubiBle {
           if (!ctl.isClosed) ctl.addError(e, st);
         },
       );
+      try {
+        await ub.UniversalBle.startScan(
+          scanFilter: ub.ScanFilter(
+            withNamePrefix: const [proto.deviceNamePrefix],
+          ),
+          // Web Bluetooth では requestDevice 時に optionalServices を宣言しないと
+          // 接続後 getPrimaryService が SecurityError (blocklisted UUID) になる。
+          // native では PlatformConfig は無視されるため、常時付与で問題ない。
+          platformConfig: ub.PlatformConfig(
+            web: ub.WebOptions(
+              optionalServices: const [proto.servoServiceUuid],
+            ),
+          ),
+        );
+      } on Object catch (e, st) {
+        ctl.addError(BleUnavailableError('startScan failed: $e'), st);
+        await stop();
+        return;
+      }
       if (timeout != null) {
         timeoutTimer = Timer(timeout, stop);
       }
