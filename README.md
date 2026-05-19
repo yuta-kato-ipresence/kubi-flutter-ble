@@ -183,6 +183,14 @@ flutter analyze
 `third_party/universal_ble/` は KUBI-PATCH 以外、**手で変更しない**ルールです。
 バグ修正や機能追加は本リポジトリ側 (`lib/`) で吸収するか、upstream に PR してください。
 
+## リリース手順 (メンテナ向け)
+
+1. `pubspec.yaml` の `version` を次のバージョン番号に更新
+2. `CHANGELOG.md` の `## [Unreleased]` を `## [X.Y.Z] - YYYY-MM-DD` に確定し、新しい `## [Unreleased]` セクションを冒頭に追加
+3. `flutter test` / `flutter analyze` / `bash tools/verify-vendored-patches.sh` で最終確認
+4. `git tag vX.Y.Z && git push origin vX.Y.Z`
+5. GitHub Releases を起票 (CHANGELOG の当該バージョン節を release note に貼る)
+
 ## License
 
 BSD-3-Clause
