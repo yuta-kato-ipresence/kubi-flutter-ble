@@ -20,4 +20,9 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+# example は独立した root として pub get するため、親と同じ override を再宣言する必要がある。
+dependency_overrides:
+  universal_ble:
+    path: ../third_party/universal_ble
+
 flutter:

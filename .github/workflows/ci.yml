@@ -7,6 +7,12 @@ on:
     branches: [ main, master, develop ]
 
 jobs:
+  verify-patches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/verify-vendored-patches.sh
+
   analyze:
     runs-on: ubuntu-latest
     steps:

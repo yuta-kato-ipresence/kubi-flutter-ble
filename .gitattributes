@@ -1,0 +1,2 @@
+# ベンダリングしているコードは GitHub の言語統計から除外し、PR diff でも折りたたむ。
+third_party/** linguist-vendored=true
