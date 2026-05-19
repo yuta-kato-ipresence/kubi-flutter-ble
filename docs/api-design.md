@@ -34,7 +34,7 @@
 | U2 | 「特定角度に向けて、到達後に次の処理」をスクリプト実行 | `moveTo` + `MoveSpec` + `SettleOptions` | [§4.2](#42-u2-到達待ち付き-goto-moveto) |
 | U3 | 接続が切れても自動復帰する常駐アプリ | `setAutoReconnect` + `tryAutoConnect` | [§4.3](#43-u3-自動再接続) |
 | U4 | UI に接続状態と現在角度を双方向 bind | `state` (`ValueListenable<KubiState>`) | [§4.4](#44-u4-ui-bind-state) |
-| U5 | アプリのウィジェットテストで Kubi を mock | `KubiBle` interface + 公式 fake | [§4.5](#45-u5-テスト--モック) |
+| U5 | アプリのウィジェットテストで Kubi を mock | `KubiBle` interface + `mocktail` 等 | [§4.5](#45-u5-テスト--モック) |
 
 ### 1.2 非スコープ (本パッケージは扱わない)
 
@@ -120,15 +120,14 @@ Dart の型システム + `assert` + `ArgumentError` で早期失敗する。
 
 | Symbol | 役割 | 詳細リンク |
 |--------|------|-----------|
-| `KubiBle` (`abstract interface class`) | 公開 API の窓口。テストでは fake を実装可能 ([U5](#45-u5-テスト--モック)) | `lib/src/kubi_ble.dart` |
+| `KubiBle` (`abstract interface class`) | 公開 API の窓口。テストでは `mocktail` 等で mock 可能 ([U5](#45-u5-テスト--モック)) | `lib/src/kubi_ble.dart` |
 | `KubiBleImpl` | universal_ble を使った実装。production はこれを `new` する | `lib/src/kubi_ble_impl.dart` |
-| `FakeKubiBle` (test 用) | テスト専用の in-memory fake。`kubi_flutter_ble/testing.dart` から export | `lib/src/testing/fake_kubi_ble.dart` |
 
 ### 3.2 接続・ライフサイクル
 
 | Symbol | 用途 | UC |
 |--------|------|----|
-| `scan({Duration?, ScanFilter?})` (`Stream<KubiDevice>`) | 周辺の Kubi を逐次列挙 (利用者が UI で選ぶ場合) | U1-U4 初回接続 |
+| `scan({Duration?})` (`Stream<KubiDevice>`) | 周辺の Kubi を逐次列挙 (利用者が UI で選ぶ場合)。`ScanFilter(withNamePrefix: ['kubi'])` は内部固定 | U1-U4 初回接続 |
 | `requestDevice({Duration timeout})` | scan の最初の 1 件を返す convenience | U1-U4 初回接続 |
 | `connect(KubiDevice)` | GATT 接続 | 全 UC |
 | `disconnect()` | 明示切断 | 全 UC |
@@ -178,7 +177,8 @@ KubiBleError (sealed)
  ├─ BleConnectionError
  ├─ BleNotConnectedError
  ├─ BleCommandError
- │   └─ BleRegisterReadTimeoutError
+ │   ├─ BleRegisterReadTimeoutError
+ │   └─ BleProtocolError
  └─ BleSettleTimeoutError
 ```
 
@@ -280,25 +280,39 @@ ValueListenableBuilder<KubiState>(
 
 ### 4.5 U5 テスト / モック
 
+`KubiBle` は `abstract interface class` なので、利用者は `mocktail` / `mockito`
+で mock を作成できる:
+
 ```dart
-// In your widget test
-import 'package:kubi_flutter_ble/testing.dart';
+// widget test で KubiBle を mocktail で mock
+class _FakeKubiBle extends Mock implements KubiBle {}
 
 testWidgets('shows error on connection failure', (tester) async {
-  final fake = FakeKubiBle();
-  await tester.pumpWidget(MyApp(kubi: fake));
-  fake.simulateError(const BleConnectionError('test'));
-  await tester.pump();
-  expect(find.text('Error: ...'), findsOneWidget);
+  final fake = _FakeKubiBle();
+  when(() => fake.connectionStateStream).thenAnswer((_) => Stream.value(
+    ConnectionStateEvent(
+      state: BleConnectionState.disconnected,
+      reason: DisconnectReason.error,
+      timestamp: DateTime.now(),
+    ),
+  ));
+  // ...
 });
 ```
 
 **設計判断**:
 
-- `KubiBle` を `abstract interface class` にしている **最大の動機の一つはモッカビリティ**
-- 公式 fake (`FakeKubiBle`) を `package:kubi_flutter_ble/testing.dart` から export。`mockito` / `mocktail` 不要で widget test を書ける
-- `simulateError` / `simulatePositionUpdate` 等の test-time 操作 API を提供
-- production 依存を増やさないため、testing entry point は別 library (`testing.dart`) として分離
+- `KubiBle` を `abstract interface class` にしている最大の動機の一つはモッカビリティ。
+  Dart 3 では interface class 経由で `implements` 側に **すべての member を実装する義務** が
+  生じるので、interface の追加変更がテストコード側で必ず検出される
+- v0.2 ではパッケージ公式の `FakeKubiBle` は **提供しない**。理由:
+  - 21 members + 6 Stream + `ValueListenable` を正しく simulate する Fake は約 300-500 行
+    の独立した実装と保守が必要
+  - 実機検証 (Phase 5) で観測される接続シーケンス / move レイテンシ / debug event 順序
+    が固まる前に Fake を確定させると、widget test が green でも実機と乖離する最悪パターンを誘発する
+  - 当面は `mocktail` で利用者個別 stub。21 members の手書きは確かに冗長だが、
+    必要なメソッドだけ stub する方が `MoveSpec.synced` のような分岐を網羅するより簡潔
+- 将来の公式 Fake は Issue #6 で追跡。Phase 5 完了後にユーザー要望と実機挙動の両方が揃った時点で再評価
 
 ### 4.6 デバッグ / observability
 
@@ -404,7 +418,6 @@ attempt ─(失敗 & retry == max)→ abandoned
 | `MoveOptions.signal` | `moveTo(cancel: CancelToken?)` | named param で意図明示 |
 | `Promise<T>` | `Future<T>` | 言語標準 |
 | (なし) | `state` (`ValueListenable<KubiState>`) | Flutter 拡張 ([§2.5](#25-flutter-一級市民拡張-kubistate--valuelistenable)) |
-| (なし) | `FakeKubiBle` (testing 用) | Flutter widget test 慣習 ([§4.5](#45-u5-テスト--モック)) |
 
 ### 6.2 採用する TS 設計判断
 
@@ -430,14 +443,15 @@ attempt ─(失敗 & retry == max)→ abandoned
 
 | Platform | universal_ble サポート | 想定動作 | 検証ステータス |
 |----------|----------------------|---------|--------------|
-| iOS | ✅ | full | 未検証 (Phase 3) |
-| Android | ✅ | full | 未検証 (Phase 3) |
-| macOS | ✅ | full | 未検証 (Phase 3) |
-| Windows | ✅ | full | 未検証 (Phase 3) |
-| Linux | ✅ | BlueZ 経由 | 未検証 (Phase 3) |
-| Web | ✅ | Web Bluetooth API、scan は `requestDevice` のみ | 未検証 (Phase 3) |
+| iOS | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
+| Android | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
+| macOS | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
+| Windows | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
+| Linux | ✅ | BlueZ 経由 | 実装完了、実機検証 Pending (Phase 5) |
+| Web | ✅ | Web Bluetooth API、scan は `requestDevice` のみ | 実装完了、実機検証 Pending (Phase 5) |
 
-詳細な制約マトリクス (Web の `withServices` 必須要件 / Native の permission / `getSystemDevices` の挙動 / write with-response 強制等) は **`queue/universal-ble-investigation.md`** (Phase 2.5 で新設) を参照。
+詳細な制約マトリクス (Web の `withServices` 必須要件 / Native の permission / `getSystemDevices` の挙動 / write with-response 強制等) は **`queue/phase-2.5-universal-ble-investigation.md`** (Phase 2.5) を参照。
+プラットフォーム別の権限設定・既知制約・実機検証チェックリストは **`docs/platform-notes.md`** が SSOT。
 
 本パッケージは:
 - permission UI を提供しない (利用側で `permission_handler` 等を併用)
@@ -504,7 +518,7 @@ attempt ─(失敗 & retry == max)→ abandoned
 | `README.md` | 利用者エントリポイント (インストール → 最小例 → リンク集) |
 | `CHANGELOG.md` | バージョン間の差分・破壊的変更・採用/不採用の意思決定記録 |
 | `queue/v0.8-alignment-review.md` | 設計議論ログ (決定後も「なぜそう決めたか」の歴史として保持) |
-| `queue/universal-ble-investigation.md` (Phase 2.5) | universal_ble 動作検証結果、platform 別制約マトリクス |
+| `queue/phase-2.5-universal-ble-investigation.md` (Phase 2.5) | universal_ble 動作検証結果、platform 別制約マトリクス |
 | `example/` | UC1〜U5 を 1:1 で動かすデモ |
 
 **鉄則**: 同じ事実を 2 箇所に書かない。本書から dartdoc に移管した内容は本書側から削除する。

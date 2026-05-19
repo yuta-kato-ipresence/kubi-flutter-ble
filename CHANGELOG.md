@@ -7,7 +7,7 @@
 
 ### Added (設計レベル)
 - **設計書 v0.2.0-draft** (`docs/api-design.md`): SSOT 原則を徹底し、API カタログを dartdoc に移管。設計理由・ユースケース (U1-U5)・横断パターン・バージョニングポリシーに集中する構成へ全面改訂
-- **U5 (テスト/モック)** を first-class ユースケースに昇格。`FakeKubiBle` を `package:kubi_flutter_ble/testing.dart` から提供する方針
+- **U5 (テスト/モック)** ユースケースを明文化。`KubiBle` が `abstract interface class` であることで `mocktail` / `mockito` での mock を可能にする (v0.2 では公式 fake は未提供、v0.3 以降検討 — Issue #6)
 - **`KubiState` + `ValueListenable`** を Flutter 一級市民拡張として本体 API に昇格 (TS 版に対応物なし、集約 view、二重事実源ではないと明記)
 - **横断パターンの恒久文書化**: GATT lock + latest-value buffer / settle 検出 / listener 隔離 / cancel 伝搬 / 自動再接続 state machine / Stream セマンティクス
 - **バージョニングポリシー**: deprecation policy / MSDV / Keep a Changelog 運用 / 破壊的変更告知
@@ -41,19 +41,17 @@
 
 ### Removed
 - `experimentalSetAcceleration` / `ServoAcceleration` / `REG.ACCELERATION` / `clampAcceleration` (TS 採用しない、理由 [§6.3](docs/api-design.md#63-採用しない-ts-api))
-- `KubiProtocol.parsePosition` (誤実装。`parseRegisterReadResponse(bytes, byteWidth)` に置換予定、Phase 3 で実装と一体化)
+- `KubiProtocol.parsePosition` (誤実装。`parseRegisterReadResponse(bytes, byteWidth)` に置換済、Phase 3 で実装と一体化)
 - 旧 `kubiServiceUuid = 0000e001` / `ledUuid = 0000e002` (誤った UUID、A2 で削除済)
 - `analysis_options.yaml` から `prefer_final_parameters` / `cascade_invocations` / `one_member_abstracts` を削除予定 (Phase 2、C11)
+- `lib/src/testing/fake_kubi_ble.dart` / `lib/testing.dart` (Phase 5 prep cleanup): v0.2.0-draft 設計時に検討した公式 `FakeKubiBle` は skeleton (全 method `UnimplementedError`) のままで実装に至らなかったため、誤誘導を避けるべく entry ごと削除。v0.3 以降の本実装は Issue #6 で追跡
 
 ### Fixed (実装、A 系)
 - 全 GATT UUID を kubi-ble servo-spec.md §2.2 完全準拠に修正 (A1)
 - `servoAngle` の数式・clamp 範囲を kubi-ble v0.8 と一致 (A4)
 - 速度関連定数を整理 (A5/A5.b)、`defaultMoveSpeed=100` / `minMoveSpeed=1` / `maxMoveSpeed=100`
 
-### Added (実装、Phase 4: example + ドキュメント)
-- `example/lib/main.dart` を本実装版に刷新: scan / connect / disconnect / moveTo / subscribePosition / `KubiState` (ValueListenable) 監視 / `setAutoReconnect` / debug log 表示
-- `docs/platform-notes.md` 新設: Android 12+ 権限 (BLUETOOTH_SCAN/CONNECT)、iOS/macOS entitlement (NSBluetoothAlwaysUsageDescription, com.apple.security.device.bluetooth)、Web 制約 (ユーザージェスチャー必須 / `tryAutoConnect` は常に null = D5)、D-meta 実機検証チェックリスト
-
+### Added (実装、Phase 3: `KubiBleImpl` + テスト)
 
 - `KubiBleImpl`: TS `web-kubi-ble.ts` v0.8 を Dart に移植した本実装 (`lib/src/kubi_ble_impl.dart`、約 1300 行)
   - **scan**: `Stream<KubiDevice>` first-class、`ScanFilter(withNamePrefix: ['kubi'])` + `seen` で dedupe、onCancel で `stopScan` 呼出
@@ -70,6 +68,12 @@
 - `BleProtocolError extends BleCommandError`: register read 不正長 / write 失敗をラップする新派生エラー
 - **テスト基盤** (`test/`): `FakeUniversalBlePlatform extends UniversalBlePlatform` (UniversalBle.setInstance 経由で差し替え)、writes / subscribed 履歴記録 + `pushRegisterNotify` / `emitAvailability` 等の駆動 helper
 - **テストケース** (7 件全 pass): scan dedupe / connect transition + motorPositionUuid subscribe / connect failure / register read 1:1 照合 (mismatched header 無視) / register read timeout / moveTo write 順序 (TS 完全一致を実証) / availability poweredOff → deviceLost
+
+### Added (実装、Phase 4: example + ドキュメント)
+
+- `example/lib/main.dart` を本実装版に刷新: 1 画面 sectioned layout (Connection / Control / Observation / KubiState / Events) で **公開 API 21 members を全て露出** した検証用アプリ (約 930 行)
+- `example/README.md` 新設: 動かし方 (Android / iOS / macOS / Web) / 画面構成 / D-meta チェックリスト 1:1 対応表 / トラブルシュート
+- `docs/platform-notes.md` 新設: Android 12+ 権限 (BLUETOOTH_SCAN/CONNECT)、iOS/macOS entitlement (NSBluetoothAlwaysUsageDescription, com.apple.security.device.bluetooth)、Web 制約 (ユーザージェスチャー必須 / `tryAutoConnect` は常に null = D5)、D-meta 実機検証チェックリスト
 
 
 ### Deprecated

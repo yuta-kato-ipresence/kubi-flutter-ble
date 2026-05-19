@@ -3,10 +3,10 @@
 /// 公開エントリポイント。`KubiBle` インターフェースと、その引数・戻り値となる
 /// すべての value type / sealed type / enum / error をここから export する。
 ///
-/// テスト用 `FakeKubiBle` は production 依存を増やさないため
-/// `package:kubi_flutter_ble/testing.dart` から別 entry で提供する。
-///
 /// 内部 protocol 定数 (`kubi_protocol.dart`) は **package-private** (export しない)。
+///
+/// テスト時は `KubiBle` が `abstract interface class` なので `mocktail` 等で
+/// mock 可能。公式 fake は v0.2 では提供しない (Issue #6 で v0.3 以降に検討)。
 library;
 
 // 中核インターフェース

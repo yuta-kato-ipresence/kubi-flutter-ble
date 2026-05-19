@@ -37,8 +37,9 @@ import 'types/subscribe_position_options.dart';
 ///
 /// ## テスト
 ///
-/// `package:kubi_flutter_ble/testing.dart` の `FakeKubiBle` を使うこと。
-/// production 依存を増やさないため `mockito` / `mocktail` 不要で widget test を書ける。
+/// `KubiBle` は `abstract interface class` なので、利用者は `mocktail` /
+/// `mockito` 等で mock できる。
+/// v0.2 ではパッケージ公式の fake は提供しない (Issue #6 で v0.3 以降検討)。
 abstract interface class KubiBle {
   // ==========================================================================
   // 接続・ライフサイクル (api-design §3.2)

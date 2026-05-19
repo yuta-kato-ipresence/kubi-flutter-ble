@@ -1,95 +1,135 @@
 # kubi_flutter_ble
 
-> **Status**: 🚧 Design phase complete. Implementation not yet started.
+> Flutter package for controlling **Kubi** robotic devices over Bluetooth Low Energy (BLE).
+> Cross-platform via [`universal_ble`](https://pub.dev/packages/universal_ble) — iOS / Android / macOS / Windows / Linux / Web。
 
-A modern Flutter BLE package for Kubi robotic devices.
+**Status**: `v0.2.0-draft` 実装完了。実機検証 (Phase 5) のみ残り、`pub.dev` 公開前です。
 
-This is a **ground-up rewrite** of `kubi_flutter_plugin` with:
-- Cross-platform BLE support via `universal_ble` (iOS, Android, macOS, Windows, Linux, Web)
-- Type-safe API using Dart 3 sealed classes and pattern matching
-- Stream-based events for natural Flutter UI integration
-- TS-side (`kubi-web-ble`) feature parity with Flutter-idiomatic design
+## できること
 
-## Current Status
+- **接続**: `scan` で周辺 Kubi を Stream 列挙、`connect` / `disconnect` で GATT 接続管理
+- **操縦 (低レイテンシ)**: `setTarget` — ジョイスティック / スライダー用、latest-value buffer で BLE 帯域を浪費しない
+- **到達待ち (スクリプト)**: `moveTo` — `MoveSpec.independent` / `.synced` + `SettleOptions` で「到達後に次の処理」を `Future` で await
+- **位置観測**: `getCommandedPosition` / `getActualPosition` (1 shot) と `subscribePosition` (Stream、再帰 Timer で overlap 防止)
+- **自動再接続**: `setAutoReconnect(AutoReconnectConfig)` — 線形バックオフ、`maxRetries` 到達で abandon
+- **UI 統合**: `state` (`ValueListenable<KubiState>`) — `ValueListenableBuilder` で接続状態 + 位置 + 移動中 flag を 1 つの集約 view にバインド
+- **観測性**: `onMove` (4-phase 移動イベント) / `onDebugEvent` (11 種、register read / poll skip / auto-reconnect 等)
+- **型安全エラー**: `KubiBleError` を sealed class で階層化、Dart 3 の exhaustive switch 対応
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 0 | ✅ Complete | Repository scaffolding |
-| 1 | ✅ Complete | API design v0.2.0-draft (`docs/api-design.md`、SSOT 原則準拠) |
-| 2 | 🚧 Pending | 型定義刷新 / `kubi_protocol` top-level 化 / lint 調整 |
-| 2.5 | 🚧 Pending | universal_ble 一括動作検証 (`queue/universal-ble-investigation.md`) |
-| 3 | 🚧 Pending | `KubiBleImpl` 実装 + 実機検証 |
-| 4 | 🚧 Pending | テスト・example app・`FakeKubiBle` 公式 fake |
-| 5 | 🚧 Pending | 0.2.0 リリース |
+## インストール
 
-設計議論の正本: [`queue/v0.8-alignment-review.md`](queue/v0.8-alignment-review.md) (B/C/D 全 30+ 項目決着済)
+```yaml
+dependencies:
+  kubi_flutter_ble:
+    git:
+      url: https://github.com/yuta-kato-ipresence/kubi-flutter-ble.git
+      ref: main
+```
 
-## Planned Features
+`pub.dev` 公開前のため、当面は git 依存で取得してください。
 
-- Physical arrival await (`moveTo`)
-- Fire-and-forget with latest value buffer (`setTarget`)
-- 4-phase move events via `Stream<MoveEvent>`
-- GATT lock for burst safety
-- Auto-reconnect and `tryAutoConnect`
-- Register-based position reading (`getCommandedPosition` / `getActualPosition`)
-- Type-safe error hierarchy with sealed classes
+プラットフォーム別の必須権限・entitlement は **[`docs/platform-notes.md`](docs/platform-notes.md)** にまとめています (Android 12+ の `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT`、iOS の `NSBluetoothAlwaysUsageDescription`、Web のユーザージェスチャー要件、等)。
 
-## Architecture (Phase 2 完了後の想定)
+## Quick Start
+
+```dart
+import 'package:kubi_flutter_ble/kubi_flutter_ble.dart';
+
+final kubi = KubiBleImpl();
+
+// 1) 最初に見つかった Kubi に接続
+final device = await kubi.requestDevice(timeout: const Duration(seconds: 5));
+if (device == null) return;
+await kubi.connect(device);
+
+// 2) 到達待ちで 45°/10° に動かす
+final result = await kubi.moveTo(
+  target: const PanTiltAngles(pan: 45, tilt: 10),
+  spec: const MoveSpec.independent(speed: MoveSpeed.uniform(80)),
+);
+switch (result) {
+  case MoveResultSettled(:final target):
+    print('settled at $target');
+  case MoveResultCancelled(:final target):
+    print('cancelled before reaching $target');
+}
+
+// 3) UI に bind
+ValueListenableBuilder<KubiState>(
+  valueListenable: kubi.state,
+  builder: (_, s, __) => Text(
+    '${s.connectionState} commanded=${s.commanded} actual=${s.actual}',
+  ),
+);
+```
+
+より広い API カバレッジは **[`example/`](example/)** を参照 (公開 API 21 members を全て露出した検証用アプリ、起動してそのまま実機検証ハーネスとして使えます)。
+
+## 進捗
+
+| Phase | Status | 概要 |
+|-------|--------|------|
+| 0 | ✅ | リポジトリスキャフォールド |
+| 1 | ✅ | API 設計 v0.2.0-draft (`docs/api-design.md`) |
+| 2 | ✅ | 型定義刷新 / `kubi_protocol` top-level 化 / lint 調整 |
+| 2.5 | ✅ | `universal_ble` v1.2.0 一括動作調査 (D1-D5) |
+| 3 | ✅ | `KubiBleImpl` 本実装 + ユニットテスト 7/7 pass |
+| 4 | ✅ | example app 全 API 露出版 + `docs/platform-notes.md` 整備 |
+| 5 | ⏳ | 実機検証 (D-meta チェックリスト消化) + `0.2.0` リリース |
+
+## アーキテクチャ
 
 ```
 lib/
-├── kubi_flutter_ble.dart          # 公開 API entry point
-├── testing.dart                   # FakeKubiBle 提供 (widget test 用)
+├── kubi_flutter_ble.dart          # 公開 API entry point (これだけ import すれば良い)
 └── src/
-    ├── kubi_ble.dart              # KubiBle abstract interface
-    ├── kubi_ble_impl.dart         # universal_ble 実装 (Phase 3)
-    ├── kubi_protocol.dart         # GATT/プロトコル top-level 関数 (package-private)
-    ├── types/                     # immutable value types
-    │   ├── kubi_device.dart       # KubiDevice (id + name のみ)
-    │   ├── pan_tilt_angles.dart
-    │   ├── move_speed.dart        # sealed: MoveSpeed.uniform / .perAxis
-    │   ├── move_spec.dart         # sealed: MoveSpec.independent / .synced
-    │   ├── move_result.dart       # sealed: MoveResultSettled / Cancelled (target 必須)
-    │   ├── move_event.dart        # 4 phase イベント
-    │   ├── position_snapshot.dart # immutable class (Record ではない)
-    │   ├── ble_debug_event.dart   # リッチフィールド + 11 種 enum
-    │   ├── kubi_state.dart        # 集約 view (Flutter 拡張)
-    │   ├── settle_options.dart
-    │   ├── subscribe_position_options.dart
-    │   ├── auto_reconnect_config.dart
-    │   └── cancel_token.dart      # AbortSignal 相当の最小実装
-    ├── errors/                    # sealed final class
-    │   └── kubi_ble_error.dart
-    └── testing/                   # テスト用 fake (export は lib/testing.dart 経由)
-        └── fake_kubi_ble.dart
+    ├── kubi_ble.dart              # KubiBle abstract interface class (21 members)
+    ├── kubi_ble_impl.dart         # universal_ble を使った実装 (約 1300 行)
+    ├── kubi_protocol.dart         # GATT UUID / 補正テーブル / 数値変換 (package-private)
+    ├── types/                     # immutable value types (sealed + final)
+    └── errors/                    # KubiBleError sealed 階層
 ```
 
-## ドキュメント / SSOT
+設計原則・各 type の選択理由・横断パターン (GATT lock / latest-value buffer / settle 検出 / cancel 伝搬 / 自動再接続 state machine / Stream セマンティクス) は [`docs/api-design.md`](docs/api-design.md) を参照。
+
+## テスト
+
+```bash
+flutter test           # ユニットテスト (FakeUniversalBlePlatform 経由、7 ケース)
+flutter analyze        # 0 error / 0 warning
+cd example && flutter analyze   # 同上
+```
+
+利用者がアプリ側で widget test を書く場合、`KubiBle` は `abstract interface class` なので `mocktail` / `mockito` で mock できます。v0.2 ではパッケージ公式の Fake は同梱していません ([Issue #6](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/6) で v0.3 以降に検討)。
+
+## ドキュメント
 
 | 文書 | 担当範囲 |
 |------|---------|
-| dartdoc (`lib/src/**/*.dart`) | API シグネチャ・パラメータ意味・例外・Stream セマンティクス |
-| [`docs/api-design.md`](docs/api-design.md) | 設計理由 / ユースケース (U1-U5) / 横断パターン / バージョニングポリシー |
-| [`CHANGELOG.md`](CHANGELOG.md) | バージョン間の差分・破壊的変更・採用/不採用の意思決定 |
-| [`queue/v0.8-alignment-review.md`](queue/v0.8-alignment-review.md) | 設計議論ログ (B/C/D 全項目の Decision 履歴) |
+| dartdoc (`lib/src/**/*.dart`) | API シグネチャ・パラメータ・例外・Stream セマンティクス (SSOT) |
+| [`docs/api-design.md`](docs/api-design.md) | 設計理由 / ユースケース U1-U5 / 横断パターン / バージョニングポリシー |
+| [`docs/platform-notes.md`](docs/platform-notes.md) | OS 別の必須権限・既知制約・D-meta 実機検証チェックリスト |
+| [`example/README.md`](example/README.md) | 検証用 example app の使い方と D-meta チェックリスト 1:1 対応 |
+| [`CHANGELOG.md`](CHANGELOG.md) | バージョン間の差分・破壊的変更・採用/不採用の意思決定記録 |
+| [`queue/v0.8-alignment-review.md`](queue/v0.8-alignment-review.md) | 設計議論ログ (B/C/D 全 30+ 項目の Decision 履歴。歴史記録) |
 
-**鉄則**: 同じ事実を 2 箇所に書かない (SSOT 原則、設計書 §2.1 参照)
+**鉄則**: 同じ事実を 2 箇所に書かない (SSOT 原則、[`docs/api-design.md §2.1`](docs/api-design.md#21-ssot-原則))。
 
 ## 設計判断ハイライト
 
-- **BLE ライブラリ**: `universal_ble` (6 platform 対応、内部 command queue)
-- **Dart SDK**: ^3.11.0 (Dart 3 sealed class / pattern matching を活用)
-- **Stream-first**: callback registration は採らない、すべて `Stream<T>`
+- **BLE ライブラリ**: `universal_ble` (6 platform 対応、内部 `BleCommandQueue` を `QueueType.perDevice` で活用)
+- **Dart SDK**: `^3.11.0` (sealed class / pattern matching を活用、Dart 3 exhaustive switch でケース漏れをコンパイル時検出)
+- **Stream-first**: callback registration は採らない、すべて `Stream<T>` で broadcast
 - **集約状態**: `ValueListenable<KubiState>` を Flutter 一級市民拡張として本体 API に
-- **エラー階層**: `sealed class` + `final class` で exhaustive switch
-- **テスト**: `FakeKubiBle` を公式提供、`mockito`/`mocktail` 不要
-- **不採用 TS API**: `experimentalSetAcceleration` 系 (実験 API、主要 UC に不要)
+- **GATT 直列化**: universal_ble の per-device queue に委譲。我々の self-lock は「moveTo cancel-on-newer」「`setTarget` latest-value buffer」「subscribe poll skip」のアプリ層ロジックのみ
+- **不採用 TS API**: `experimentalSetAcceleration` 系 (実験 API、実機検証不足、主要 UC に不要)
 
-## Relationship to `kubi_flutter_plugin`
+## `kubi_flutter_plugin` との関係
 
-This package replaces `kubi_flutter_plugin` for new development:
-- `kubi_flutter_plugin`: Maintenance mode only (bug fixes, no new features)
-- `kubi_flutter_ble`: Active development, modern API, cross-platform from day one
+本パッケージは旧 `kubi_flutter_plugin` を **新規開発向けに置き換える** ものです:
+
+- `kubi_flutter_plugin`: maintenance mode (bug fix のみ、新機能停止)
+- `kubi_flutter_ble`: 現行開発、modern API、Day 1 から cross-platform
 
 ## License
 

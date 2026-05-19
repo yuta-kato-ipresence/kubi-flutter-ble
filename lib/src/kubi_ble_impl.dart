@@ -40,8 +40,7 @@ import 'types/subscribe_position_options.dart';
 ///   検知時に内部 disconnect する (D4)
 ///
 /// テスト時は `UniversalBle.setInstance(...)` で `UniversalBlePlatform` を mock
-/// できるため、本クラス自体は backend を直接受け取らない (`testing/fake_kubi_ble.dart`
-/// 経由でも代替可能)。
+/// できるため、本クラス自体は backend を直接受け取らない。
 final class KubiBleImpl implements KubiBle {
   /// インスタンスを生成し、universal_ble の per-device queue (D2) を構成する。
   ///

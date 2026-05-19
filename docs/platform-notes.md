@@ -84,7 +84,7 @@ macOS は `macos/Runner/DebugProfile.entitlements` および `Release.entitlemen
 
 ## D-meta 実機検証チェックリスト
 
-以下を Phase 4 の実機検証フェーズで消化する (✅ = 検証済、⏳ = 未消化):
+以下を **Phase 5 の実機検証フェーズ** で消化する (✅ = 検証済、⏳ = 未消化):
 
 ### scan / connect 基本系
 - [ ] ⏳ Android: `kubi` prefix のデバイスを scan して列挙、connect 成功
@@ -117,7 +117,7 @@ macOS は `macos/Runner/DebugProfile.entitlements` および `Release.entitlemen
 
 ---
 
-## 既知の TODO (Phase 4+)
+## 既知の TODO (Phase 5+)
 
 - [ ] iOS の background mode (`bluetooth-central`) 設定有無の動作差分
 - [ ] Linux / Windows desktop サポートは universal_ble v1.2.0 が limited、当面 Tier-2 扱い
