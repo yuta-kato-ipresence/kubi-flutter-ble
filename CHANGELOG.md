@@ -76,6 +76,21 @@
 - `docs/platform-notes.md` 新設: Android 12+ 権限 (BLUETOOTH_SCAN/CONNECT)、iOS/macOS entitlement (NSBluetoothAlwaysUsageDescription, com.apple.security.device.bluetooth)、Web 制約 (ユーザージェスチャー必須 / `tryAutoConnect` は常に null = D5)、D-meta 実機検証チェックリスト
 
 
+### Fixed (Web BLE 経路、Phase 5 実機検証中の発見)
+- `KubiBleImpl.scan`: `UniversalBle.scanStream.listen` を `UniversalBle.startScan` の **呼出前** に移動。`scanStream` は broadcast (buffer 無し) で、Web の `startScan` は requestDevice picker の await の中で同期的に `scanStream.add` を呼ぶため、subscribe を後置すると emit を取り逃して device が永遠に列挙されない race があった。native は影響を受けないが Web で必須の修正
+- `KubiBleImpl.scan`: `PlatformConfig.web.optionalServices: [servoServiceUuid]` を宣言。Web Bluetooth のセキュリティモデルは picker 表示時に services を declare しないと、接続後 `getPrimaryService` が `SecurityError: Tried getting blocklisted UUID` で拒否される。native では `PlatformConfig` は無視されるため常時付与で問題なし
+
+### Added (Web 関連ドキュメント)
+- `docs/platform-notes.md` の Web 節を大幅補強: ブラウザ互換性マトリクス、macOS 26 + Chrome ≤ 148 stable の renderer crash (Issue #7)、iOS は Bluefy が事実上必須、`optionalServices` / `scanStream` race / ユーザージェスチャー / HTTPS context などの諸制約を網羅
+
+### Added (vendoring)
+- `third_party/universal_ble/` に `universal_ble` 1.2.0 を vendoring。Web (Chrome) で `BluetoothDevice.watchAdvertisements()` が renderer プロセスをクラッシュさせる既知バグ ([WebBluetoothCG/web-bluetooth#538](https://github.com/WebBluetoothCG/web-bluetooth/issues/538)) を 1 行 patch (`_watchDeviceAdvertisements` を no-op 化) で回避。`pubspec.yaml` / `example/pubspec.yaml` に `dependency_overrides` で差し替えを宣言
+  - **A/B 検証済 (2026-05-19)**: patch を一時的に外して `flutter run -d chrome` で踏むと、macOS 26.3 + Chrome Canary 150.0.7844.0 でも `scan` 起動時に renderer がクラッシュすることを確認。Issue #7 (TCC 起因の Chrome 148 stable crash) とは独立のバグで、Chrome バージョン更新では解消しないため、本 patch は (上流が `watchAdvertisements` 呼出を gate するまで) 必須
+- `tools/verify-vendored-patches.sh`: vendoring した patch の anchor (`[KUBI-PATCH]`) が消失していないかを検査する shell script。CI (`verify-patches` job) で実行
+- `.gitattributes`: `third_party/**` を `linguist-vendored=true` に。GitHub の言語統計から除外し、PR diff で折りたたみ
+- `third_party/universal_ble/KUBI-PATCH.md`: vendoring の理由・patch の所在・上流追従手順を記録
+- README に "ベンダー依存" 節を追加し、運用ルールを文書化
+
 ### Deprecated
 - (なし — 0.x 期間は破壊的変更を許容、deprecated の旅路は 1.0 以降開始)
 

@@ -67,18 +67,113 @@ macOS は `macos/Runner/DebugProfile.entitlements` および `Release.entitlemen
 
 ---
 
-## Web (Chrome / Edge)
+## Web
 
-### 既知制約
+Web Bluetooth は **ブラウザと OS の協調**に強く依存する領域で、native プラットフォームと比べて挙動が脆い。
+本パッケージで吸収できる部分と、ユーザー環境に依存する部分を区別して扱う。
 
-- **`tryAutoConnect()` は常に `null` を返す** (D5)。`universal_ble` v1.2.0 が `navigator.bluetooth.getDevices()` を wrap していないため、永続接続候補を取得できない。
-- ブラウザの BLE 仕様により **`scan()` を呼ぶ前にユーザージェスチャー** (ボタンクリック等) が必要。
-- 一部ブラウザでは `requestDevice` ダイアログがネイティブ UI なので、`KubiBle.scan().first` で受け取った 1 件目以外を選択する手段はない (ブラウザ側で UI 完結)。
+### ブラウザ互換性マトリクス
 
-### 必要 origin
+| OS | ブラウザ | Web Bluetooth | 備考 |
+|---|---|---|---|
+| Windows | Chrome / Edge / Brave | ◎ | 標準的に動作 |
+| macOS (〜Sequoia 25) | Chrome / Edge / Brave | ◎ | 標準的に動作 |
+| macOS (Tahoe 26+) | **Chrome stable ≤ 148** | ✗ | **renderer crash**。後述 |
+| macOS (Tahoe 26+) | Chrome 150+ / Canary / Edge stable | ◎ | macOS 26 の TCC 強化に対応済 |
+| iOS / iPadOS | Safari, Mobile Chrome, Mobile Edge | ✗ | Apple が Web Bluetooth を実装しない方針 |
+| iOS / iPadOS | **Bluefy** (`com.basiclyl.bluefy`) | ◎ | サードパーティブラウザで Web Bluetooth を提供。**iOS の唯一の選択肢** |
+| Android | Chrome / Edge | ◎ | 標準的に動作 |
+| Linux | Chrome | △ | BlueZ 起因で時々不安定 |
 
-- HTTPS 必須 (`localhost` は例外)。
-- Origin Trial 等の追加設定は不要 (Web Bluetooth は安定 API)。
+### macOS 26 (Tahoe) + Chrome ≤ 148 stable の renderer crash
+
+**症状**: `flutter run -d chrome` で起動し Scan / requestDevice を呼ぶと、Chrome タブが消える (renderer プロセスが kill される)。
+ブラウザコンソールには何も出ない。dev server のログにも出ない。
+
+**原因**: macOS 26 (Tahoe) は Bluetooth プライバシー強制 (TCC) を強化しており、`navigator.bluetooth.requestDevice` を呼んだプロセスに対して、
+Chrome 148 stable は適切な entitlement / Info.plist エントリで応答できず、OS が renderer を kill する。
+Chromium 側のコードは 149/150 で対応済みのため、Chrome stable が 150 系に上がれば自然解消する。
+
+**確認方法** (将来同種事象が起きた場合の手順):
+
+```bash
+# 直近の Chrome renderer crash dump を確認
+/bin/ls -lt "$HOME/Library/Application Support/Google/Chrome/Crashpad/completed/" | head -3
+
+# crash dump 内の TCC marker を検索
+/usr/bin/strings "<dump_path>" | grep -iE "Bluetooth|NSBluetoothAlwaysUsageDescription|usage description"
+```
+
+`NSBluetoothAlwaysUsageDescription` 関連の文字列が出れば TCC kill 確定。
+
+**回避策**:
+
+- 開発時: `CHROME_EXECUTABLE=/Applications/Google\ Chrome\ Canary.app/Contents/MacOS/Google\ Chrome\ Canary flutter run -d chrome` で Canary を使用。
+- エンドユーザー: ブラウザ側のリリース待ち。本パッケージ側で事前検出する手段はない (renderer が即座に kill されるため JS から見えない)。
+- tracking: [Issue #7](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/7)
+
+### iOS / iPadOS は Bluefy が事実上必須
+
+iOS / iPadOS の Safari、Mobile Chrome、Mobile Edge は **すべて Web Bluetooth を実装していない** (Apple のポリシー)。
+iOS で Web アプリから BLE デバイスにアクセスするには **[Bluefy](https://apps.apple.com/jp/app/bluefy-web-ble-browser/id1492822055)**
+(App Store の Web Bluetooth 対応ブラウザ) をユーザーがインストールして利用する必要がある。
+
+このため、本パッケージを Web ビルドで配布する場合、iOS ユーザー向けの導線として:
+- アプリ説明 / ランディングページに「iOS では Bluefy をご利用ください」と明記
+- 検出した UA が iOS Safari / iOS Chrome の場合は、UI 上で Bluefy への誘導を出す
+
+…を実装側 (このパッケージを使うアプリ) の責務として案内する。Bluefy 内では Chrome と概ね同じ挙動 (Web Bluetooth API 仕様準拠) になる。
+
+### `optionalServices` の宣言が必須
+
+Web Bluetooth のセキュリティモデルでは、`navigator.bluetooth.requestDevice` の picker 表示時に **アクセス予定のサービス UUID を宣言** しないと、
+接続後の `getPrimaryService` が `SecurityError: Tried getting blocklisted UUID` で拒否される。
+
+本パッケージは `KubiBle.scan()` で内部的に以下を universal_ble に渡しており、利用者側で対応不要:
+
+```dart
+PlatformConfig(
+  web: WebOptions(
+    optionalServices: [servoServiceUuid],
+  ),
+)
+```
+
+ただし将来 servo-spec が更新されてサービス UUID が増えた場合、`kubi_protocol.dart` に定数を追加するだけでなく
+`KubiBleImpl.scan()` の `optionalServices` リストにも追加する必要がある点に注意。
+
+### `scanStream` は broadcast で buffer されない
+
+`universal_ble.scanStream` は broadcast stream で **listener が居ない瞬間の emit は失われる**。
+Web の `startScan` は picker await の中で同期的に `scanStream.add()` を呼ぶため、`startScan` の Future 完了後に subscribe すると emit を取り逃す。
+
+本パッケージは `KubiBleImpl.scan()` で **`scanStream.listen` を `startScan` 呼出の前に置く** ことでこの race を回避している。将来 scan 関連を編集する際はこの順序を崩さないこと。
+
+### ユーザージェスチャー必須
+
+`navigator.bluetooth.requestDevice` (= 本パッケージの `scan()` / `requestDevice()`) は **ユーザー操作 (ボタンクリック等) を起点に呼ぶ必要がある**。
+`initState` / アプリ起動直後の自動実行は不可。これは Web Bluetooth 仕様レベルの制約で、本パッケージでは制御できない。
+
+### HTTPS context
+
+Web Bluetooth は secure context (`https://` または `localhost`) でのみ動作。`http://` で配信されたページからは
+`navigator.bluetooth === undefined` となり、`KubiBle.scan()` は失敗する。
+
+### `tryAutoConnect()` は常に `null`
+
+`universal_ble` v1.2.0 が `navigator.bluetooth.getDevices()` (Web Bluetooth の bonded device 列挙 API) を wrap していないため、
+Web では `tryAutoConnect()` は常に `null` を返す (D5)。永続接続候補のセッション間共有はできない。
+
+### picker UI はブラウザ任せ
+
+`requestDevice` ダイアログはブラウザのネイティブ UI で、本パッケージ / Flutter からは制御不能。
+`KubiBle.scan()` で受け取った最初の 1 件以外を select する手段はない (picker 内で 1 件選んだ時点で stream 完了)。
+
+### `watchAdvertisements` のクラッシュ回避 (vendoring)
+
+`universal_ble` v1.2.0 の Web 実装は scan 後に `BluetoothDevice.watchAdvertisements()` を無条件呼び出ししており、これは Chromium の experimental API で renderer crash の既知バグがある
+([WebBluetoothCG/web-bluetooth#538](https://github.com/WebBluetoothCG/web-bluetooth/issues/538))。
+本パッケージは `third_party/universal_ble/` に universal_ble を vendoring し、`_watchDeviceAdvertisements` を no-op にする 1 行 patch を当てて回避している。詳細は [`third_party/universal_ble/KUBI-PATCH.md`](../third_party/universal_ble/KUBI-PATCH.md)。
 
 ---
 

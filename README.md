@@ -131,6 +131,56 @@ cd example && flutter analyze   # 同上
 - `kubi_flutter_plugin`: maintenance mode (bug fix のみ、新機能停止)
 - `kubi_flutter_ble`: 現行開発、modern API、Day 1 から cross-platform
 
+## ベンダー依存 (`third_party/universal_ble`)
+
+`universal_ble` を `third_party/universal_ble/` に **vendoring** し、`dependency_overrides` で差し替えています。
+これは Web (Chrome) で `universal_ble` がスキャン時に呼ぶ `BluetoothDevice.watchAdvertisements()` が
+**Chromium の renderer プロセスをクラッシュさせる既知バグ**を持っているためです
+([WebBluetoothCG/web-bluetooth#538](https://github.com/WebBluetoothCG/web-bluetooth/issues/538))。
+当該 API は Kubi のユースケース (ペアリング → connect → GATT) では不要なので skip します。
+
+**差分はわずか 1 行**で、`return;` を 1 つ追加して `_watchDeviceAdvertisements` を no-op にするだけ。
+詳細は [`third_party/universal_ble/KUBI-PATCH.md`](third_party/universal_ble/KUBI-PATCH.md) を参照してください。
+
+### Patch の保護
+
+`tools/verify-vendored-patches.sh` が patch の anchor (`[KUBI-PATCH] skip watchAdvertisements`)
+を grep で検査します。CI (`.github/workflows/ci.yml` の `verify-patches` job) で毎回実行されるので、
+上流追従時に patch を再適用し忘れると CI が落ちる仕組みです。
+
+### 上流追従手順
+
+新しい `universal_ble` のリリースに追従したくなったとき:
+
+```bash
+# 1. 新バージョン X.Y.Z を pub-cache に取らせる
+(cd /tmp && rm -rf _ubup && mkdir _ubup && cd _ubup &&
+  printf 'name: x\nenvironment: {sdk: ^3.0.0}\ndependencies: {universal_ble: ^X.Y.Z}\n' > pubspec.yaml &&
+  dart pub get)
+
+# 2. third_party/universal_ble を丸ごと差し替え
+rm -rf third_party/universal_ble
+cp -r ~/.pub-cache/hosted/pub.dev/universal_ble-X.Y.Z third_party/universal_ble
+
+# 3. 1 行 patch を再適用
+#    lib/src/universal_ble_web/universal_ble_web.dart の
+#    _watchDeviceAdvertisements 関数の冒頭に下記を挿入:
+#      return; // [KUBI-PATCH] skip watchAdvertisements — Chrome renderer crash bug (see third_party/universal_ble/KUBI-PATCH.md)
+#      // ignore: dead_code
+
+# 4. 検査
+bash tools/verify-vendored-patches.sh
+flutter pub get && (cd example && flutter pub get)
+flutter analyze
+```
+
+差分はすべて単一 commit にまとめると、後で何が変わったかが `git log third_party/universal_ble/` で追えます。
+
+### `third_party/` 配下に手を入れないこと
+
+`third_party/universal_ble/` は KUBI-PATCH 以外、**手で変更しない**ルールです。
+バグ修正や機能追加は本リポジトリ側 (`lib/`) で吸収するか、upstream に PR してください。
+
 ## License
 
 BSD-3-Clause
