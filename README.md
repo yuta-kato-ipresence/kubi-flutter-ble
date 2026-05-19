@@ -3,7 +3,7 @@
 > Flutter package for controlling **Kubi** robotic devices over Bluetooth Low Energy (BLE).
 > Cross-platform via [`universal_ble`](https://pub.dev/packages/universal_ble) — iOS / Android / macOS / Windows / Linux / Web。
 
-**Status**: `v0.2.0-draft` 実装完了。実機検証 (Phase 5) のみ残り、`pub.dev` 公開前です。
+**Status**: `v0.2.0-draft` 実装完了 + Web 実機検証済。他プラットフォーム実機検証 ([Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)) は未消化、`pub.dev` 公開前です。
 
 ## できること
 
@@ -67,15 +67,16 @@ ValueListenableBuilder<KubiState>(
 
 ## 進捗
 
-| Phase | Status | 概要 |
-|-------|--------|------|
-| 0 | ✅ | リポジトリスキャフォールド |
-| 1 | ✅ | API 設計 v0.2.0-draft (`docs/api-design.md`) |
-| 2 | ✅ | 型定義刷新 / `kubi_protocol` top-level 化 / lint 調整 |
-| 2.5 | ✅ | `universal_ble` v1.2.0 一括動作調査 (D1-D5) |
-| 3 | ✅ | `KubiBleImpl` 本実装 + ユニットテスト 7/7 pass |
-| 4 | ✅ | example app 全 API 露出版 + `docs/platform-notes.md` 整備 |
-| 5 | ⏳ | 実機検証 (D-meta チェックリスト消化) + `0.2.0` リリース |
+API 設計 / 本実装 / ユニットテスト (7/7 pass) / example app / Web 実機検証は完了済。
+
+残作業は [GitHub Issues](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues) を参照:
+
+- **[#4](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/4)** v0.2.0 release preparation
+- **[#8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)** Device verification matrix (Android / iOS / macOS) — Web は ✅ 済
+- **[#9](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/9)** `kubi-web-ble` 側仕様変更の追従棚卸し
+- **[#5](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/5)** `MoveSpeed` 値域拡張 (kubi-ble v0.9 連携)
+- **[#6](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/6)** 公式 `FakeKubiBle` 提供 (v0.3 以降)
+- **[#7](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/7)** Web Bluetooth crash on Chrome 148 stable / macOS 26 (外部依存)
 
 ## アーキテクチャ
 
@@ -111,9 +112,10 @@ cd example && flutter analyze   # 同上
 | [`docs/platform-notes.md`](docs/platform-notes.md) | OS 別の必須権限・既知制約・D-meta 実機検証チェックリスト |
 | [`example/README.md`](example/README.md) | 検証用 example app の使い方と D-meta チェックリスト 1:1 対応 |
 | [`CHANGELOG.md`](CHANGELOG.md) | バージョン間の差分・破壊的変更・採用/不採用の意思決定記録 |
-| [`queue/v0.8-alignment-review.md`](queue/v0.8-alignment-review.md) | 設計議論ログ (B/C/D 全 30+ 項目の Decision 履歴。歴史記録) |
 
 **鉄則**: 同じ事実を 2 箇所に書かない (SSOT 原則、[`docs/api-design.md §2.1`](docs/api-design.md#21-ssot-原則))。
+
+過去の設計議論ログ・調査記録は [`queue/`](queue/) 配下に歴史としてのみ保持しています (現役の正本ではありません)。
 
 ## 設計判断ハイライト
 

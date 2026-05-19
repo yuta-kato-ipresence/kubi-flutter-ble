@@ -43,7 +43,6 @@
 - `experimentalSetAcceleration` / `ServoAcceleration` / `REG.ACCELERATION` / `clampAcceleration` (TS 採用しない、理由 [§6.3](docs/api-design.md#63-採用しない-ts-api))
 - `KubiProtocol.parsePosition` (誤実装。`parseRegisterReadResponse(bytes, byteWidth)` に置換済、Phase 3 で実装と一体化)
 - 旧 `kubiServiceUuid = 0000e001` / `ledUuid = 0000e002` (誤った UUID、A2 で削除済)
-- `analysis_options.yaml` から `prefer_final_parameters` / `cascade_invocations` / `one_member_abstracts` を削除予定 (Phase 2、C11)
 - `lib/src/testing/fake_kubi_ble.dart` / `lib/testing.dart` (Phase 5 prep cleanup): v0.2.0-draft 設計時に検討した公式 `FakeKubiBle` は skeleton (全 method `UnimplementedError`) のままで実装に至らなかったため、誤誘導を避けるべく entry ごと削除。v0.3 以降の本実装は Issue #6 で追跡
 
 ### Fixed (実装、A 系)
@@ -51,7 +50,7 @@
 - `servoAngle` の数式・clamp 範囲を kubi-ble v0.8 と一致 (A4)
 - 速度関連定数を整理 (A5/A5.b)、`defaultMoveSpeed=100` / `minMoveSpeed=1` / `maxMoveSpeed=100`
 
-### Added (実装、Phase 3: `KubiBleImpl` + テスト)
+### Added (実装、KubiBleImpl + テスト)
 
 - `KubiBleImpl`: TS `web-kubi-ble.ts` v0.8 を Dart に移植した本実装 (`lib/src/kubi_ble_impl.dart`、約 1300 行)
   - **scan**: `Stream<KubiDevice>` first-class、`ScanFilter(withNamePrefix: ['kubi'])` + `seen` で dedupe、onCancel で `stopScan` 呼出
@@ -69,14 +68,14 @@
 - **テスト基盤** (`test/`): `FakeUniversalBlePlatform extends UniversalBlePlatform` (UniversalBle.setInstance 経由で差し替え)、writes / subscribed 履歴記録 + `pushRegisterNotify` / `emitAvailability` 等の駆動 helper
 - **テストケース** (7 件全 pass): scan dedupe / connect transition + motorPositionUuid subscribe / connect failure / register read 1:1 照合 (mismatched header 無視) / register read timeout / moveTo write 順序 (TS 完全一致を実証) / availability poweredOff → deviceLost
 
-### Added (実装、Phase 4: example + ドキュメント)
+### Added (実装、example + ドキュメント)
 
 - `example/lib/main.dart` を本実装版に刷新: 1 画面 sectioned layout (Connection / Control / Observation / KubiState / Events) で **公開 API 21 members を全て露出** した検証用アプリ (約 930 行)
 - `example/README.md` 新設: 動かし方 (Android / iOS / macOS / Web) / 画面構成 / D-meta チェックリスト 1:1 対応表 / トラブルシュート
 - `docs/platform-notes.md` 新設: Android 12+ 権限 (BLUETOOTH_SCAN/CONNECT)、iOS/macOS entitlement (NSBluetoothAlwaysUsageDescription, com.apple.security.device.bluetooth)、Web 制約 (ユーザージェスチャー必須 / `tryAutoConnect` は常に null = D5)、D-meta 実機検証チェックリスト
 
 
-### Fixed (Web BLE 経路、Phase 5 実機検証中の発見)
+### Fixed (Web BLE 経路、実機検証で発見)
 - `KubiBleImpl.scan`: `UniversalBle.scanStream.listen` を `UniversalBle.startScan` の **呼出前** に移動。`scanStream` は broadcast (buffer 無し) で、Web の `startScan` は requestDevice picker の await の中で同期的に `scanStream.add` を呼ぶため、subscribe を後置すると emit を取り逃して device が永遠に列挙されない race があった。native は影響を受けないが Web で必須の修正
 - `KubiBleImpl.scan`: `PlatformConfig.web.optionalServices: [servoServiceUuid]` を宣言。Web Bluetooth のセキュリティモデルは picker 表示時に services を declare しないと、接続後 `getPrimaryService` が `SecurityError: Tried getting blocklisted UUID` で拒否される。native では `PlatformConfig` は無視されるため常時付与で問題なし
 

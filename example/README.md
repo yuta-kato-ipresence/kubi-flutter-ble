@@ -82,6 +82,8 @@ flutter run -d chrome
 
 `availability` 表示はステータスバーに常時、変化は Events ログにも出ます (`availabilityStream`)。
 
+`dispose()` はアプリの `State.dispose` で呼ばれるため UI には露出していません。本番アプリでも、`KubiBle` インスタンスを破棄するタイミングで必ず呼んでください (Stream listener / 内部 Timer の cleanup)。
+
 ### 🎮 Control
 
 | 項目 | 対応 API |

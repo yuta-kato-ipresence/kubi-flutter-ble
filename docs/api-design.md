@@ -128,7 +128,7 @@ Dart の型システム + `assert` + `ArgumentError` で早期失敗する。
 | Symbol | 用途 | UC |
 |--------|------|----|
 | `scan({Duration?})` (`Stream<KubiDevice>`) | 周辺の Kubi を逐次列挙 (利用者が UI で選ぶ場合)。`ScanFilter(withNamePrefix: ['kubi'])` は内部固定 | U1-U4 初回接続 |
-| `requestDevice({Duration timeout})` | scan の最初の 1 件を返す convenience | U1-U4 初回接続 |
+| `requestDevice({Duration timeout = 5s})` | scan の最初の 1 件を返す convenience | U1-U4 初回接続 |
 | `connect(KubiDevice)` | GATT 接続 | 全 UC |
 | `disconnect()` | 明示切断 | 全 UC |
 | `setAutoReconnect(...)` / `tryAutoConnect()` | 自動再接続。Web は常に null を返す (D5、`queue/phase-2.5-universal-ble-investigation.md`) | U3 |
@@ -441,17 +441,19 @@ attempt ─(失敗 & retry == max)→ abandoned
 
 本パッケージは `universal_ble` の薄いラッパーである。
 
-| Platform | universal_ble サポート | 想定動作 | 検証ステータス |
-|----------|----------------------|---------|--------------|
-| iOS | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
-| Android | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
-| macOS | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
-| Windows | ✅ | full | 実装完了、実機検証 Pending (Phase 5) |
-| Linux | ✅ | BlueZ 経由 | 実装完了、実機検証 Pending (Phase 5) |
-| Web | ✅ | Web Bluetooth API、scan は `requestDevice` のみ | 実装完了、実機検証 Pending (Phase 5) |
+「動作対象」(コードパスが存在する) と「保証対象」(`kubi_flutter_ble` 側で検証・サポートする) を分けて整理する。
 
-詳細な制約マトリクス (Web の `withServices` 必須要件 / Native の permission / `getSystemDevices` の挙動 / write with-response 強制等) は **`queue/phase-2.5-universal-ble-investigation.md`** (Phase 2.5) を参照。
-プラットフォーム別の権限設定・既知制約・実機検証チェックリストは **`docs/platform-notes.md`** が SSOT。
+| Platform | universal_ble サポート | 動作対象 (コード) | 保証対象 (検証) |
+|----------|----------------------|------------------|----------------|
+| Android | ✅ | full | 未検証 ([Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)) |
+| iOS | ✅ | full | 未検証 ([Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8))。Safari / Mobile Chrome は Web Bluetooth 未実装、Bluefy 必須 |
+| macOS | ✅ | full | 未検証 ([Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)) |
+| Web | ✅ | Web Bluetooth API、scan は `requestDevice` のみ。`tryAutoConnect` は常に null (D5) | Chrome Canary 150 + macOS 26.3 で ✅ 済。他環境は [Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)。macOS 26 + Chrome ≤ 148 stable は [Issue #7](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/7) |
+| Windows | ✅ | universal_ble v1.2.0 では limited (Tier-2 扱い、`docs/platform-notes.md` 参照) | 保証対象外 |
+| Linux | ✅ | universal_ble v1.2.0 では BlueZ 経由で limited (Tier-2 扱い) | 保証対象外 |
+
+詳細な制約マトリクス (Web の `withServices` 必須要件 / Native の permission / `getSystemDevices` の挙動 / write with-response 強制等) は `queue/phase-2.5-universal-ble-investigation.md` (歴史・調査ログ) を参照。
+プラットフォーム別の権限設定・既知制約は **`docs/platform-notes.md`** が SSOT、実機検証進捗は **[Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8)** が canonical。
 
 本パッケージは:
 - permission UI を提供しない (利用側で `permission_handler` 等を併用)
@@ -491,8 +493,8 @@ attempt ─(失敗 & retry == max)→ abandoned
 ### 8.5 破壊的変更の告知
 
 - CHANGELOG に **必ず** Migration Guide セクションを書く
-- 1.0 以降の major bump は **`docs/migration/vN.md`** を新設して詳細移行手順を記録
 - `queue/` は議論ログ専用、利用者向け告知には使わない
+- 1.0 以降で major bump の規模が大きい場合は別途 `docs/migration/vN.md` の新設を検討する (0.x 期間は CHANGELOG 内で完結)
 
 ---
 
@@ -514,11 +516,22 @@ attempt ─(失敗 & retry == max)→ abandoned
 | `lib/src/**/*.dart` の **dartdoc** | API シグネチャ・パラメータ意味・例外・Stream セマンティクス |
 | `docs/api-design.md` (本書) | 設計理由 / ユースケース / 横断パターン / プラットフォーム前提 / TS との関係 / バージョニングポリシー |
 | `lib/src/kubi_protocol.dart` の dartdoc | プロトコル数値変換ロジック (補正テーブル等) の意味 |
+| `docs/platform-notes.md` | OS 別の必須権限・既知制約 (実機検証進捗は [Issue #8](https://github.com/yuta-kato-ipresence/kubi-flutter-ble/issues/8) が canonical) |
+| `third_party/universal_ble/KUBI-PATCH.md` | vendoring patch の根拠と A/B 検証ログ |
 | kubi-ble/docs/servo-spec.md (参照) | GATT / レジスタの物理仕様 |
 | `README.md` | 利用者エントリポイント (インストール → 最小例 → リンク集) |
 | `CHANGELOG.md` | バージョン間の差分・破壊的変更・採用/不採用の意思決定記録 |
-| `queue/v0.8-alignment-review.md` | 設計議論ログ (決定後も「なぜそう決めたか」の歴史として保持) |
-| `queue/phase-2.5-universal-ble-investigation.md` (Phase 2.5) | universal_ble 動作検証結果、platform 別制約マトリクス |
 | `example/` | UC1〜U5 を 1:1 で動かすデモ |
+
+### 9.3 歴史・調査ログ (SSOT ではない)
+
+`queue/` 配下は **過去の設計議論・調査記録の保管庫**。現役の正本ではなく、「なぜそう決めたか」を後追いするための歴史として残している。
+
+| ファイル | 範囲 |
+|---|---|
+| `queue/v0.8-alignment-review.md` | TS v0.8 整合レビュー (B/C/D 全 30+ 項目の Decision 履歴) |
+| `queue/phase-2.5-universal-ble-investigation.md` | universal_ble v1.2.0 動作調査結果 / platform 別制約マトリクス |
+| `queue/api-design-revision-plan.md` | 設計書改訂計画 (中立レビュアー条件付き Go の追跡) |
+| `queue/docs-honesty-cleanup.md` | 文書整理計画 (Phase 5 prep 時のもの) |
 
 **鉄則**: 同じ事実を 2 箇所に書かない。本書から dartdoc に移管した内容は本書側から削除する。
